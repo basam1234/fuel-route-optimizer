@@ -1,5 +1,5 @@
 from django.urls import path
-from django.views.generic import TemplateView
+from django.views.generic import RedirectView
 from fueling.views import MapView, RouteOptimizeView
 
 urlpatterns = [
