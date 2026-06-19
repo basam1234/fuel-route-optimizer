@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fuel Route Optimizer</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
+    #map { height: 100%; width: 100%; }
+    #banner { position: absolute; z-index: 1000; top: 12px; left: 12px; right: 12px;
+              background: #fff; padding: 10px 14px; border-radius: 10px;
+              box-shadow: 0 2px 12px rgba(0,0,0,.15); font-size: 14px; }
+    .err { color: #b00020; }
+  </style>
+</head>
+<body>
+  <div id="banner">
+    {% if error %}<span class="err">{{ error }}</span>{% else %}Route &amp; cost-optimal fuel stops{% endif %}
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script id="route-data" type="application/json">{{ route_json|safe }}</script>
+  <script id="stops-data" type="application/json">{{ stops_json|safe }}</script>
+  <script>
+    const routeGeometry = JSON.parse(document.getElementById("route-data").textContent || "null");
+    const stops = JSON.parse(document.getElementById("stops-data").textContent || "[]");
+
+    const map = L.map("map").setView([39.5, -98.35], 4);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    if (routeGeometry) {
+      // GeoJSON is [lng,lat]; Leaflet's geoJSON consumes it directly (no hand-swapping).
+      const line = L.geoJSON(routeGeometry, { style: { color: "#1565c0", weight: 4 } }).addTo(map);
+      map.fitBounds(line.getBounds(), { padding: [40, 40] });
+    }
+
+    stops.forEach(function (s) {
+      L.marker([s.lat, s.lng]).addTo(map).bindPopup(
+        "<strong>" + s.name + "</strong><br>" +
+        s.city + ", " + s.state + "<br>" +
+        "$" + s.price + "/gal<br>" +
+        s.gallons + " gal purchased"
+      );
+    });
+  </script>
+</body>
+</html>
