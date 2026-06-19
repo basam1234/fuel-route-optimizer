@@ -1,0 +1,8 @@
+Django==6.0.6
+djangorestframework>=3.17.1
+requests>=2.32
+numpy>=2.0
+pandas>=2.2
+pytest>=8.0
+pytest-django>=4.9
+responses>=0.25
