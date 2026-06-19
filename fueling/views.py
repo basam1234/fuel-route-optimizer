@@ -32,7 +32,7 @@ def _run_pipeline(start_q: str, finish_q: str) -> dict:
     routing_calls = 0 if route.get("from_cache") else 1
     total_miles = route["total_miles"]
 
-        stations = data_cache.load_stations()
+    stations = data_cache.load_stations()
     needs_stops = total_miles > settings.VEHICLE_RANGE_MILES
 
     candidates = corridor.candidates_along_route(route, stations, settings.FUEL_CORRIDOR_MILES)
