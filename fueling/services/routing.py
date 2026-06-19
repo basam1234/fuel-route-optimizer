@@ -47,7 +47,7 @@ def get_route(start: tuple, finish: tuple) -> dict:
         resp = requests.get(url, params=params, timeout=settings.EXTERNAL_HTTP_TIMEOUT)
         resp.raise_for_status()
         payload = resp.json()
-    except (requests.Timeout, requests.ConnectionError, requests.HTTPError) as exc:
+    except (requests.RequestException, ValueError) as exc:
         raise RoutingError(f"Routing service error: {exc}") from exc
 
     if payload.get("code") != "Ok" or not payload.get("routes"):

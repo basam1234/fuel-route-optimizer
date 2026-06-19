@@ -47,7 +47,7 @@ def resolve(query: str) -> tuple[float, float, int]:
         )
         resp.raise_for_status()
         data = resp.json()
-    except (requests.Timeout, requests.ConnectionError, requests.HTTPError) as exc:
+    except (requests.RequestException, ValueError) as exc:
         raise GeocodeServiceError(f"Geocoding service error for '{query}': {exc}") from exc
 
     if not data:

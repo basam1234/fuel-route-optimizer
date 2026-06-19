@@ -21,11 +21,11 @@
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script id="route-data" type="application/json">{{ route_json|safe }}</script>
-  <script id="stops-data" type="application/json">{{ stops_json|safe }}</script>
+  {{ route_geometry|json_script:"route-data" }}
+  {{ stops|json_script:"stops-data" }}
   <script>
-    const routeGeometry = JSON.parse(document.getElementById("route-data").textContent || "null");
-    const stops = JSON.parse(document.getElementById("stops-data").textContent || "[]");
+    const routeGeometry = JSON.parse(document.getElementById("route-data").textContent);
+    const stops = JSON.parse(document.getElementById("stops-data").textContent);
 
     const map = L.map("map").setView([39.5, -98.35], 4);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {

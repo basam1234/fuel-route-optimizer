@@ -37,9 +37,18 @@ def candidates_along_route(route: dict, stations, corridor_miles: float) -> list
     if idxs.size == 0:
         return []
 
+    total = float(cumulative[-1]) if cumulative.size else 0.0
+    stride = max(1, int(coords.shape[0] / (total * 2))) if total > 0 else 1
+    keep = np.arange(0, coords.shape[0], stride)
+    if keep[-1] != coords.shape[0] - 1:
+        keep = np.append(keep, coords.shape[0] - 1)
+    search_lat = route_lat[keep]
+    search_lng = route_lng[keep]
+    search_cum = cumulative[keep]
+
     out = []
     for i in idxs:
-        dists = _haversine_to_all(s_lat[i], s_lng[i], route_lat, route_lng)
+        dists = _haversine_to_all(s_lat[i], s_lng[i], search_lat, search_lng)
         nearest = int(np.argmin(dists))
         if dists[nearest] <= corridor_miles:
             out.append(
@@ -51,7 +60,7 @@ def candidates_along_route(route: dict, stations, corridor_miles: float) -> list
                     "price": float(stations.prices[i]),
                     "lat": float(s_lat[i]),
                     "lng": float(s_lng[i]),
-                    "miles_along_route": float(cumulative[nearest]),
+                    "miles_along_route": float(search_cum[nearest]),
                 }
             )
     out.sort(key=lambda r: r["miles_along_route"])

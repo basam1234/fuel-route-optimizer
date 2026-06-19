@@ -16,26 +16,41 @@ class EmptyCorridorError(Exception):
 
 
 def _run_pipeline(start_q: str, finish_q: str) -> dict:
-    s_lat, s_lng, c1 = geocoding.resolve(start_q)
-    f_lat, f_lng, c2 = geocoding.resolve(finish_q)
+    try:
+        s_lat, s_lng, c1 = geocoding.resolve(start_q)
+    except geocoding.GeocodeError as exc:
+        exc.field = "start"
+        raise
+    try:
+        f_lat, f_lng, c2 = geocoding.resolve(finish_q)
+    except geocoding.GeocodeError as exc:
+        exc.field = "finish"
+        raise
     geocoding_calls = c1 + c2
 
     route = routing.get_route((s_lat, s_lng), (f_lat, f_lng))
     routing_calls = 0 if route.get("from_cache") else 1
     total_miles = route["total_miles"]
 
-    stations = data_cache.load_stations()
+        stations = data_cache.load_stations()
+    needs_stops = total_miles > settings.VEHICLE_RANGE_MILES
+
     candidates = corridor.candidates_along_route(route, stations, settings.FUEL_CORRIDOR_MILES)
-    if not candidates and total_miles > settings.VEHICLE_RANGE_MILES:
+    try:
+        if not candidates and needs_stops:
+            raise optimizer.InfeasibleRouteError("empty corridor")
+        plan = optimizer.plan_fuel_stops(
+            candidates, total_miles, settings.VEHICLE_RANGE_MILES, settings.VEHICLE_MPG
+        )
+    except optimizer.InfeasibleRouteError:
         candidates = corridor.candidates_along_route(
             route, stations, settings.FUEL_CORRIDOR_WIDEN_MILES
         )
-        if not candidates:
+        if not candidates and needs_stops:
             raise EmptyCorridorError("No fuel stations found near this route.")
-
-    plan = optimizer.plan_fuel_stops(
-        candidates, total_miles, settings.VEHICLE_RANGE_MILES, settings.VEHICLE_MPG
-    )
+        plan = optimizer.plan_fuel_stops(
+            candidates, total_miles, settings.VEHICLE_RANGE_MILES, settings.VEHICLE_MPG
+        )
 
     return {
         "start": {"query": start_q, "lat": s_lat, "lng": s_lng},
@@ -63,7 +78,7 @@ class RouteOptimizeView(APIView):
             return Response({"error": "geocoding_unavailable", "detail": str(exc)},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except geocoding.GeocodeError as exc:
-            field = "start" if start_q in str(exc) else "finish"
+            field = getattr(exc, "field", "start")
             return Response({"error": "geocode_failed", "field": field, "detail": str(exc)},
                             status=status.HTTP_400_BAD_REQUEST)
         except routing.RoutingError as exc:
@@ -72,7 +87,11 @@ class RouteOptimizeView(APIView):
         except (optimizer.InfeasibleRouteError, EmptyCorridorError) as exc:
             return Response({"error": "no_feasible_plan", "detail": str(exc)},
                             status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-
+        except Exception:
+            return Response(
+                {"error": "internal_error", "detail": "An unexpected error occurred."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
         plan = result["plan"]
         stops_out = [
             {
@@ -110,15 +129,14 @@ class MapView(APIView):
         start_q = request.query_params.get("start", "").strip()
         finish_q = request.query_params.get("finish", "").strip()
         if not start_q or not finish_q:
-            return render(request, "map.html", {"route_json": "null", "stops_json": "[]",
-                                                "error": "Provide ?start= and ?finish="})
+            return render(request, "map.html",
+                          {"route_geometry": None, "stops": [],
+                           "error": "Provide ?start= and ?finish="})
         try:
             result = _run_pipeline(start_q, finish_q)
-        except Exception as exc:  # map page degrades gracefully rather than 500ing
-            return render(request, "map.html", {"route_json": "null", "stops_json": "[]",
-                                                "error": str(exc)})
-
-        import json
+        except Exception as exc:
+            return render(request, "map.html",
+                          {"route_geometry": None, "stops": [], "error": str(exc)})
 
         stops = [
             {
@@ -132,12 +150,6 @@ class MapView(APIView):
             }
             for s in result["plan"]["stops"]
         ]
-        return render(
-            request,
-            "map.html",
-            {
-                "route_json": json.dumps(result["route"]["geometry"]),
-                "stops_json": json.dumps(stops),
-                "error": "",
-            },
-        )
+        return render(request, "map.html",
+                      {"route_geometry": result["route"]["geometry"],
+                       "stops": stops, "error": ""})
